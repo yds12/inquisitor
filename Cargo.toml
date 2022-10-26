@@ -1,9 +1,17 @@
 [package]
+authors = ["Y. D. Santos <yds12@protonmail.com>"]
 name = "inquisitor"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "Simple and fast load testing tool"
+homepage = "https://github.com/yds12/inquisitor"
+repository = "https://github.com/yds12/inquisitor"
+readme = "README.md"
+documentation = "https://docs.rs/inquisitor/latest/"
+keywords = ["load-testing", "stress-testing", "api", "http", "performance"]
+categories = ["development-tools", "development-tools::profiling",
+"network-programming", "web-programming", "command-line-utilities"]
 
 [dependencies]
 reqwest = "0.11"
