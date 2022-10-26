@@ -1,0 +1,12 @@
+[package]
+name = "inquisitor"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = "0.11"
+tokio = { version = "1", features = ["sync", "macros", "rt-multi-thread"] }
+clap = { version = "3.2", features = ["derive"] }
+regex = "1"
