@@ -1,4 +1,4 @@
-use clap::Parser as _;
+use clap::{Parser as _, ValueEnum, AppSettings};
 use reqwest::{Client, ClientBuilder};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -8,21 +8,43 @@ const ITERATIONS: usize = 10_000;
 const MAX_CONNS: usize = 12;
 const CONCURRENT_TASKS: usize = 100;
 
+#[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
+pub enum Method {
+    GET,
+    POST
+}
+
 #[derive(clap::Parser)]
-#[clap(author, about)]
+#[clap(about, setting = AppSettings::DisableColoredHelp)]
 pub struct Config {
+    /// Target URL for the load test
     #[clap(value_parser)]
     url: String,
+    /// Number of requests to be sent
     #[clap(long, short = 'n', default_value_t = ITERATIONS, value_parser)]
     iterations: usize,
+    /// Maximum number of HTTP connections to be kept opened concurrently
     #[clap(long, short = 'c', default_value_t = MAX_CONNS, value_parser)]
     connections: usize,
+    /// Maximum number of tasks to be run concurrently
     #[clap(long, short = 't', default_value_t = CONCURRENT_TASKS, value_parser)]
-    concurrent_tasks: usize,
+    tasks: usize,
+    /// Print the result of successful responses
     #[clap(long, action)]
     print_response: bool,
+    /// If the response matches the string specified in this parameter, the
+    /// response will be considered to be a failure
     #[clap(long, value_parser)]
     failed_body: Option<String>,
+    /// Do not validate (TLS) certificates
+    #[clap(long, action)]
+    ignore_certs: bool,
+    /// HTTP method to use in the requests
+    #[clap(long, default_value_t = Method::GET, value_enum)]
+    method: Method,
+    /// Body of the HTTP request (only used if method is POST)
+    #[clap(long, short = 'b', value_parser)]
+    request_body: Option<String>,
 }
 
 #[derive(Debug)]
@@ -31,14 +53,14 @@ struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub fn new(max_conns: usize) -> Self {
+    pub fn new(max_conns: usize, ignore_certs: bool) -> Self {
         Self {
             pool: (0..max_conns)
                 .into_iter()
                 .map(|_| {
                     Some(
                         ClientBuilder::new()
-                            .danger_accept_invalid_certs(true)
+                            .danger_accept_invalid_certs(ignore_certs)
                             .build()
                             .unwrap(),
                     )
@@ -70,7 +92,7 @@ impl ConnectionPool {
 #[tokio::main]
 async fn main() {
     let config = Config::parse();
-    let pool = ConnectionPool::new(config.connections);
+    let pool = ConnectionPool::new(config.connections, config.ignore_certs);
     let pool_mutex = Arc::new(Mutex::new(pool));
 
     let times = Arc::new(Mutex::new(
@@ -80,7 +102,7 @@ async fn main() {
     let errors = Arc::new(AtomicUsize::new(0));
 
     let test_start_time = std::time::SystemTime::now();
-    let batches = config.iterations / config.concurrent_tasks;
+    let batches = config.iterations / config.tasks;
 
     let failed_regex = if let Some(regex) = config.failed_body {
         Some(regex::Regex::new(&regex).expect("Failed to parse regex"))
@@ -88,10 +110,12 @@ async fn main() {
         None
     };
 
+    let request_body = Box::leak(Box::new(config.request_body)) as &Option<_>;
+
     for i in 0..batches {
         let mut handles = Vec::new();
 
-        for j in 0..config.concurrent_tasks {
+        for j in 0..config.tasks {
             let passes = passes.clone();
             let errors = errors.clone();
             let pool = pool_mutex.clone();
@@ -112,8 +136,12 @@ async fn main() {
                 let client = client.unwrap();
 
                 let req_start_time = std::time::SystemTime::now();
-                let response = client.get(url).send().await;
-                times.lock().await[i * config.concurrent_tasks + j] =
+                let response = match (config.method, request_body.as_deref()) {
+                    (Method::GET, _) => client.get(url).send().await,
+                    (Method::POST, Some(body)) => client.post(url).body(body).send().await,
+                    (Method::POST, None) => client.post(url).send().await,
+                };
+                times.lock().await[i * config.tasks + j] =
                     req_start_time.elapsed().unwrap().as_micros();
 
                 match response {
