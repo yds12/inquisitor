@@ -2,6 +2,8 @@
 
 Simple and fast HTTP load testing tool written in Rust.
 
+This project is currently in its infancy and is very much a work in progress.
+
 ## Motivation
 
 There are some other tools in this category in Rust, such as
