@@ -108,11 +108,9 @@ async fn main() {
     let test_start_time = std::time::SystemTime::now();
     let batches = config.iterations / config.tasks;
 
-    let failed_regex = if let Some(regex) = config.failed_body {
+    let failed_regex = config.failed_body.and_then(|regex|
         Some(regex::Regex::new(&regex).expect("Failed to parse regex"))
-    } else {
-        None
-    };
+    );
 
     let request_body = Box::leak(Box::new(config.request_body)) as &Option<_>;
 
@@ -197,8 +195,7 @@ async fn main() {
         }
     }
 
-    let elapsed_ns = test_start_time.elapsed().unwrap().as_nanos();
-    let elapsed_ms = elapsed_ns as f64 / 1_000_000.0;
+    let elapsed_ms = test_start_time.elapsed().unwrap().as_millis() as f64;
     let rps = (config.iterations as f64 / (elapsed_ms / 1_000.0)) as usize;
 
     let times = &mut *times.lock().await;
@@ -212,8 +209,9 @@ async fn main() {
     );
 
     println!(
-        "response times:\n\tmean\t{:.3} ms\n\tmin\t{:.3} ms\n\tmax\t{:.3} ms",
+        "response times:\n\tmean\t{:.3} ms\n\tst.dev\t{:.3} ms\n\tmin\t{:.3} ms\n\tmax\t{:.3} ms",
         times.mean() / 1000.0,
+        times.stdev() / 1000.0,
         times.min() as f64 / 1000.0,
         times.max() as f64 / 1000.0,
     );
