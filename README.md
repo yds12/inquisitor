@@ -58,3 +58,8 @@ command line parameters, type:
 
     $ inquisitor --help
 
+## Links
+
+* Documentation: [docs.rs](https://docs.rs/inquisitor/latest)
+* Crate: [crates.io](https://crates.io/crates/inquisitor) and [lib.rs](https://lib.rs/crates/inquisitor)
+* Repository: [Github](https://github.com/yds12/inquisitor)
