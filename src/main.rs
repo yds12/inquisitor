@@ -1,4 +1,5 @@
-use clap::{Parser as _, ValueEnum, AppSettings};
+use clap::{AppSettings, Parser as _, ValueEnum};
+use hdrhistogram::Histogram;
 use reqwest::{Client, ClientBuilder};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -11,7 +12,7 @@ const CONCURRENT_TASKS: usize = 100;
 #[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
 pub enum Method {
     GET,
-    POST
+    POST,
 }
 
 #[derive(clap::Parser)]
@@ -95,9 +96,12 @@ async fn main() {
     let pool = ConnectionPool::new(config.connections, config.ignore_certs);
     let pool_mutex = Arc::new(Mutex::new(pool));
 
+    // histogram of response times, recorded in microseconds
     let times = Arc::new(Mutex::new(
-        (0..config.iterations).map(|_| 0).collect::<Vec<u128>>(),
+        Histogram::<u64>::new_with_max(1_000_000_000_000, 3)
+            .expect("Failed to create histogram for response times: invalid parameters"),
     ));
+
     let passes = Arc::new(AtomicUsize::new(0));
     let errors = Arc::new(AtomicUsize::new(0));
 
@@ -112,10 +116,10 @@ async fn main() {
 
     let request_body = Box::leak(Box::new(config.request_body)) as &Option<_>;
 
-    for i in 0..batches {
+    for _ in 0..batches {
         let mut handles = Vec::new();
 
-        for j in 0..config.tasks {
+        for _ in 0..config.tasks {
             let passes = passes.clone();
             let errors = errors.clone();
             let pool = pool_mutex.clone();
@@ -141,11 +145,14 @@ async fn main() {
                     (Method::POST, Some(body)) => client.post(url).body(body).send().await,
                     (Method::POST, None) => client.post(url).send().await,
                 };
-                times.lock().await[i * config.tasks + j] =
-                    req_start_time.elapsed().unwrap().as_micros();
+                times
+                    .lock()
+                    .await
+                    .record(req_start_time.elapsed().unwrap().as_micros() as u64)
+                    .expect("time out of bounds");
 
                 match response {
-                    Ok(res) if res.status() == 200 && failed_regex.is_none() => {
+                    Ok(res) if res.status().is_success() && failed_regex.is_none() => {
                         passes.fetch_add(1, Ordering::SeqCst);
                         if config.print_response {
                             println!(
@@ -154,7 +161,7 @@ async fn main() {
                             );
                         }
                     }
-                    Ok(res) if res.status() == 200 && failed_regex.is_some() => {
+                    Ok(res) if res.status().is_success() && failed_regex.is_some() => {
                         let body = res.text().await.unwrap();
 
                         if failed_regex.unwrap().is_match(&body) {
@@ -168,7 +175,7 @@ async fn main() {
                             }
                         }
                     }
-                    Ok(res) if res.status() != 200 => {
+                    Ok(res) if !res.status().is_success() => {
                         println!("Response is not 200. Status code: {}", res.status());
                         errors.fetch_add(1, Ordering::SeqCst);
                     }
@@ -206,25 +213,18 @@ async fn main() {
 
     println!(
         "response times:\n\tmean\t{:.3} ms\n\tmin\t{:.3} ms\n\tmax\t{:.3} ms",
-        times.iter().sum::<u128>() as f64 / config.iterations as f64 / 1000.0,
-        *times.iter().min().unwrap() as f64 / 1000.0,
-        *times.iter().max().unwrap() as f64 / 1000.0,
+        times.mean() / 1000.0,
+        times.min() as f64 / 1000.0,
+        times.max() as f64 / 1000.0,
     );
 
     println!(
         "latencies:\n\t50%\t{:.3} ms\n\t75%\t{:.3} ms\n\t90%\t{:.3} ms\n\t95%\t{:.3} ms\n\t99%\t{:.3} ms\n\t99.9%\t{:.3} ms",
-        percentile(times, 50.0) as f64 / 1000.0,
-        percentile(times, 75.0) as f64 / 1000.0,
-        percentile(times, 90.0) as f64 / 1000.0,
-        percentile(times, 95.0) as f64 / 1000.0,
-        percentile(times, 99.0) as f64 / 1000.0,
-        percentile(times, 99.9) as f64 / 1000.0,
+        times.value_at_quantile(0.5) as f64 / 1000.0,
+        times.value_at_quantile(0.75) as f64 / 1000.0,
+        times.value_at_quantile(0.9) as f64 / 1000.0,
+        times.value_at_quantile(0.95) as f64 / 1000.0,
+        times.value_at_quantile(0.99) as f64 / 1000.0,
+        times.value_at_quantile(0.999) as f64 / 1000.0,
     );
-}
-
-fn percentile(vals: &mut Vec<u128>, perc: f64) -> u128 {
-    vals.sort();
-    let perc_ix = ((vals.len() - 1) as f64 * (perc / 100.0) as f64) as usize;
-
-    vals[perc_ix]
 }
