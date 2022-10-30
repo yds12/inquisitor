@@ -3,6 +3,7 @@ use hdrhistogram::Histogram;
 use reqwest::{Client, ClientBuilder};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::collections::VecDeque;
 use tokio::sync::Mutex;
 
 const ITERATIONS: usize = 10_000;
@@ -50,7 +51,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct ConnectionPool {
-    pool: Vec<Option<Client>>,
+    pool: VecDeque<Client>,
 }
 
 impl ConnectionPool {
@@ -59,34 +60,21 @@ impl ConnectionPool {
             pool: (0..max_conns)
                 .into_iter()
                 .map(|_| {
-                    Some(
                         ClientBuilder::new()
                             .danger_accept_invalid_certs(ignore_certs)
                             .build()
-                            .unwrap(),
-                    )
+                            .unwrap()
                 })
                 .collect(),
         }
     }
 
     pub fn get_one(&mut self) -> Option<Client> {
-        for slot in self.pool.iter_mut() {
-            if slot.is_some() {
-                return slot.take();
-            }
-        }
-
-        return None;
+        self.pool.pop_front()
     }
 
     pub fn put_back(&mut self, conn: Client) {
-        for slot in self.pool.iter_mut() {
-            if slot.is_none() {
-                *slot = Some(conn);
-                return;
-            }
-        }
+        self.pool.push_back(conn);
     }
 }
 
