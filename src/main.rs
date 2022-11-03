@@ -2,7 +2,7 @@ use clap::{AppSettings, Parser as _, ValueEnum};
 use hdrhistogram::Histogram;
 use reqwest::ClientBuilder;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -35,8 +35,8 @@ pub struct Config {
     #[clap(long, value_parser)]
     failed_body: Option<String>,
     /// Do not validate (TLS) certificates
-    #[clap(long, action)]
-    ignore_certs: bool,
+    #[clap(long, short = 'k', action)]
+    insecure: bool,
     /// HTTP method to use in the requests
     #[clap(long, default_value_t = Method::GET, value_enum)]
     method: Method,
@@ -64,7 +64,8 @@ fn main() {
         if previously_set {
             std::process::exit(130);
         }
-    }).expect("Error setting signal handler");
+    })
+    .expect("Error setting signal handler");
 
     let config = Config::parse();
 
@@ -88,7 +89,7 @@ fn main() {
 
     let failed_regex = config
         .failed_body
-        .and_then(|regex| Some(regex::Regex::new(&regex).expect("Failed to parse regex")));
+        .map(|regex| regex::Regex::new(&regex).expect("Failed to parse regex"));
 
     let request_body = Box::leak(Box::new(config.request_body)) as &Option<_>;
 
@@ -102,7 +103,7 @@ fn main() {
 
     for _ in 0..config.connections {
         let client = ClientBuilder::new()
-            .danger_accept_invalid_certs(config.ignore_certs)
+            .danger_accept_invalid_certs(config.insecure)
             .build()
             .unwrap();
 
@@ -166,9 +167,7 @@ fn main() {
                             passes.fetch_add(1, Ordering::SeqCst);
 
                             if config.print_response {
-                                if !config.hide_errors {
-                                    eprintln!("Response successful. Contents: {}", body);
-                                }
+                                println!("Response successful. Contents: {}", body);
                             }
                         }
                     }
