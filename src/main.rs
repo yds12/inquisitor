@@ -3,7 +3,7 @@ use hdrhistogram::Histogram;
 use reqwest::ClientBuilder;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 const ITERATIONS: usize = 1000;
 const MAX_CONNS: usize = 12;
@@ -145,17 +145,23 @@ fn main() {
 
     let times = rt.block_on(async {
         futures::future::join_all(handles).await;
-        times.lock().await
+        Arc::try_unwrap(times).expect("bug: could not unwrap Arc").into_inner()
     });
 
     let elapsed_ms = test_start_time.elapsed().unwrap().as_millis() as f64;
-    let rps = (config.iterations as f64 / (elapsed_ms / 1_000.0)) as usize;
+    print_results(config.iterations, times, elapsed_ms,
+    errors.load(Ordering::Relaxed), passes.load(Ordering::Relaxed));
+}
+
+fn print_results(iterations: usize, times: Histogram<u64>, elapsed_ms: f64,
+                 errors: usize, passes: usize) {
+    let rps = (iterations as f64 / (elapsed_ms / 1_000.0)) as usize;
 
     println!(
         "total time: {:.3} s\nerrors: {:?}/{:?}\nthroughput: {} req./s",
         elapsed_ms / 1_000.0,
         errors,
-        passes.load(Ordering::Relaxed) + errors.load(Ordering::Relaxed),
+        passes + errors,
         rps,
     );
 
