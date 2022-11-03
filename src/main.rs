@@ -2,7 +2,7 @@ use clap::{AppSettings, Parser as _, ValueEnum};
 use hdrhistogram::Histogram;
 use reqwest::ClientBuilder;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -55,6 +55,17 @@ pub struct Config {
 }
 
 fn main() {
+    let should_exit = Arc::new(AtomicBool::new(false));
+    let should_exit_clone = should_exit.clone();
+
+    ctrlc::set_handler(move || {
+        let previously_set = should_exit_clone.fetch_or(true, Ordering::SeqCst);
+
+        if previously_set {
+            std::process::exit(130);
+        }
+    }).expect("Error setting signal handler");
+
     let config = Config::parse();
 
     let mut headers = HashMap::new();
@@ -101,11 +112,16 @@ fn main() {
         let headers = headers.clone();
         let failed_regex = failed_regex.clone();
         let times = times.clone();
+        let should_exit = should_exit.clone();
 
         let task = rt.spawn(async move {
             let mut total = passes.load(Ordering::Relaxed) + errors.load(Ordering::Relaxed);
 
             while total < config.iterations {
+                if should_exit.load(Ordering::Relaxed) {
+                    break;
+                }
+
                 let mut builder = match config.method {
                     Method::GET => client.get(&url),
                     Method::POST => client.post(&url),
