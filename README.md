@@ -47,11 +47,11 @@ Install via `cargo` with:
 
 As an example, you can run with:
 
-    $ inquisitor -n 1000 -c 10 -t 10 https://localhost:8080/test
+    $ inquisitor -n 1000 -c 10 https://localhost:8080/test
 
-This will hit the URL specified, `-n` number of times, using `-t` concurrent
-tasks and a pool of `-c` HTTP connections. These parameters need to be adjusted
-according to your environment.
+This will hit the URL specified, `-n` number of times, using a pool of `-c` HTTP
+connections (in parallel, one `tokio` task per connection). These parameters
+need to be adjusted according to your environment.
 
 To display the help, which will have up to date information about all the
 command line parameters, type:
