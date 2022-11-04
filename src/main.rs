@@ -202,7 +202,6 @@ fn main() {
 
     let elapsed_ms = test_start_time.elapsed().unwrap().as_millis() as f64;
     print_results(
-        config.iterations,
         times,
         elapsed_ms,
         errors.load(Ordering::Relaxed),
@@ -210,22 +209,19 @@ fn main() {
     );
 }
 
-fn print_results(
-    iterations: usize,
-    times: Histogram<u64>,
-    elapsed_ms: f64,
-    errors: usize,
-    passes: usize,
-) {
+fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: usize) {
+    let iterations = passes + errors;
     let rps = (iterations as f64 / (elapsed_ms / 1_000.0)) as usize;
 
-    println!(
-        "total time: {:.3} s\nerrors: {:?}/{:?}\nthroughput: {} req./s",
-        elapsed_ms / 1_000.0,
-        errors,
-        passes + errors,
-        rps,
-    );
+    println!("total time: {:.3} s", elapsed_ms / 1_000.0,);
+    print!("errors: {}/{}", errors, iterations,);
+
+    if errors > 0 {
+        println!(" ({:.2}%)", (errors as f64 / iterations as f64) * 100.0);
+    } else {
+        println!("");
+    }
+    println!("throughput: {} req./s", rps,);
 
     println!(
         "response times:\n\tmean\t{:.3} ms\n\tst.dev\t{:.3} ms\n\tmin\t{:.3} ms\n\tmax\t{:.3} ms",
