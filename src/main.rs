@@ -1,13 +1,14 @@
-use clap::{AppSettings, Parser as _, ValueEnum};
+use clap::{Parser as _, ValueEnum};
 use hdrhistogram::Histogram;
 use reqwest::ClientBuilder;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
-const ITERATIONS: usize = 1000;
 const MAX_CONNS: usize = 12;
+const DEFAULT_DURATION_SECS: u64 = 20;
 
 #[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
 pub enum Method {
@@ -16,14 +17,18 @@ pub enum Method {
 }
 
 #[derive(clap::Parser)]
-#[clap(about, setting = AppSettings::DisableColoredHelp)]
+#[command(about, disable_colored_help = true)]
 pub struct Config {
     /// Target URL for the load test
     #[clap(value_parser)]
     url: String,
     /// Number of requests to be sent
-    #[clap(long, short = 'n', default_value_t = ITERATIONS, value_parser)]
-    iterations: usize,
+    ///
+    /// If this and `--duration` (`-d`) are specified, the tests will end when
+    /// the first of them is reached. If none is specified, a duration of 20
+    /// seconds is used.
+    #[clap(long, short = 'n', value_parser)]
+    iterations: Option<usize>,
     /// Maximum number of HTTP connections to be kept opened concurrently
     #[clap(long, short = 'c', default_value_t = MAX_CONNS, value_parser)]
     connections: usize,
@@ -52,7 +57,33 @@ pub struct Config {
     /// Do not print errors
     #[clap(long, action)]
     hide_errors: bool,
+    /// Duration of the test.
+    ///
+    /// Should be a number (integer or decimal) followed by a "s", "m", or "h",
+    /// for seconds, minutes and hours, respectively, without spaces. For
+    /// example: "10s" (10 seconds), "1.5m" (1.5 minutes), "20h" (20 hours).
+    ///
+    /// If this and `--duration` (`-d`) are specified, the tests will end when
+    /// the first of them is reached. If none is specified, a duration of 20
+    /// seconds is used.
+    #[clap(long, short = 'd', value_parser = parse_duration)]
+    duration: Option<Duration>,
 }
+
+#[derive(Debug)]
+enum InquisitorError {
+    DurationParseError
+}
+
+impl std::fmt::Display for InquisitorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::DurationParseError => write!(f, ""),
+        }
+    }
+}
+
+impl std::error::Error for InquisitorError {}
 
 fn main() {
     let should_exit = Arc::new(AtomicBool::new(false));
@@ -68,6 +99,13 @@ fn main() {
     .expect("Error setting signal handler");
 
     let config = Config::parse();
+
+    let (iterations, duration) = match (config.iterations, config.duration) {
+        (None, None) => (usize::MAX, DEFAULT_DURATION_SECS * 1_000_000),
+        (Some(i), None) => (i, u64::MAX),
+        (None, Some(d)) => (usize::MAX, d.as_micros() as u64),
+        (Some(i), Some(d)) => (i, d.as_micros() as u64)
+    };
 
     let mut headers = HashMap::new();
     for header in config.header {
@@ -117,8 +155,9 @@ fn main() {
 
         let task = rt.spawn(async move {
             let mut total = passes.load(Ordering::Relaxed) + errors.load(Ordering::Relaxed);
+            let mut total_elapsed = test_start_time.elapsed().unwrap().as_micros() as u64;
 
-            while total < config.iterations {
+            while total < iterations && total_elapsed < duration {
                 if should_exit.load(Ordering::Relaxed) {
                     break;
                 }
@@ -187,6 +226,7 @@ fn main() {
                 };
 
                 total = passes.load(Ordering::Relaxed) + errors.load(Ordering::Relaxed);
+                total_elapsed = test_start_time.elapsed().unwrap().as_micros() as u64;
             }
         });
 
@@ -240,4 +280,19 @@ fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: 
         times.value_at_quantile(0.99) as f64 / 1000.0,
         times.value_at_quantile(0.999) as f64 / 1000.0,
     );
+}
+
+fn parse_duration(duration: &str) -> Result<Duration, InquisitorError> {
+    let re = regex::Regex::new(r"(\d\d*(?:\.\d\d*)??)([smh])").expect("Bug: wrong regex");
+    let cap = re.captures(duration).ok_or(InquisitorError::DurationParseError)?;
+
+    let base = cap[1].parse::<f64>().map_err(|_| InquisitorError::DurationParseError)?;
+    let mul: f64 = match &cap[2] {
+        "s" => 1_000_000.0,
+        "m" => 60.0 * 1_000_000.0,
+        "h" => 60.0 * 60.0 * 1_000_000.0,
+        _ => unreachable!()
+    };
+
+    Ok(Duration::from_micros((base * mul) as u64))
 }
