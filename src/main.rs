@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 const MAX_CONNS: usize = 12;
 const DEFAULT_DURATION_SECS: u64 = 20;
 
-#[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 pub enum Method {
     GET,
     POST,
@@ -72,7 +72,7 @@ pub struct Config {
 
 #[derive(Debug)]
 enum InquisitorError {
-    DurationParseError
+    DurationParseError,
 }
 
 impl std::fmt::Display for InquisitorError {
@@ -104,7 +104,7 @@ fn main() {
         (None, None) => (usize::MAX, DEFAULT_DURATION_SECS * 1_000_000),
         (Some(i), None) => (i, u64::MAX),
         (None, Some(d)) => (usize::MAX, d.as_micros() as u64),
-        (Some(i), Some(d)) => (i, d.as_micros() as u64)
+        (Some(i), Some(d)) => (i, d.as_micros() as u64),
     };
 
     let mut headers = HashMap::new();
@@ -259,7 +259,7 @@ fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: 
     if errors > 0 {
         println!(" ({:.2}%)", (errors as f64 / iterations as f64) * 100.0);
     } else {
-        println!("");
+        println!();
     }
     println!("throughput: {} req./s", rps,);
 
@@ -284,14 +284,18 @@ fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: 
 
 fn parse_duration(duration: &str) -> Result<Duration, InquisitorError> {
     let re = regex::Regex::new(r"(\d\d*(?:\.\d\d*)??)([smh])").expect("Bug: wrong regex");
-    let cap = re.captures(duration).ok_or(InquisitorError::DurationParseError)?;
+    let cap = re
+        .captures(duration)
+        .ok_or(InquisitorError::DurationParseError)?;
 
-    let base = cap[1].parse::<f64>().map_err(|_| InquisitorError::DurationParseError)?;
+    let base = cap[1]
+        .parse::<f64>()
+        .map_err(|_| InquisitorError::DurationParseError)?;
     let mul: f64 = match &cap[2] {
         "s" => 1_000_000.0,
         "m" => 60.0 * 1_000_000.0,
         "h" => 60.0 * 60.0 * 1_000_000.0,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     Ok(Duration::from_micros((base * mul) as u64))
