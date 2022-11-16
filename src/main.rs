@@ -17,7 +17,7 @@ pub enum Method {
 }
 
 #[derive(clap::Parser)]
-#[command(about, disable_colored_help = true)]
+#[command(about, version, disable_colored_help = true)]
 pub struct Config {
     /// Target URL for the load test
     #[clap(value_parser)]
@@ -51,8 +51,8 @@ pub struct Config {
     /// Header entry for the HTTP request.
     ///
     /// The value should be in a KEY:VALUE format. Multiple key-value pairs can
-    /// be passed, e.g.: `-h Content-Type:application/json -h SomeKey:SomeValue
-    #[clap(long, short = 'h', value_parser)]
+    /// be passed, e.g.: `-H Content-Type:application/json -H SomeKey:SomeValue
+    #[clap(long, short = 'H', value_parser)]
     header: Vec<String>,
     /// Do not print errors
     #[clap(long, action)]
