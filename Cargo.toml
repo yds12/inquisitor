@@ -21,3 +21,6 @@ clap = { version = "4", features = ["derive"] }
 regex = "1"
 hdrhistogram = "7"
 ctrlc = { version = "3.0", features = ["termination"] }
+
+[dev-dependencies]
+mockito = "0.31"
