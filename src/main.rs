@@ -7,6 +7,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
+mod microseconds;
+
+use microseconds::Microseconds;
+
 const MAX_CONNS: usize = 12;
 const DEFAULT_DURATION_SECS: u64 = 20;
 
@@ -240,21 +244,21 @@ fn main() {
             .into_inner()
     });
 
-    let elapsed_ms = test_start_time.elapsed().unwrap().as_millis() as f64;
+    let elapsed_us = test_start_time.elapsed().unwrap().as_micros() as f64;
     print_results(
         times,
-        elapsed_ms,
+        elapsed_us,
         errors.load(Ordering::Relaxed),
         passes.load(Ordering::Relaxed),
     );
 }
 
-fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: usize) {
+fn print_results(times: Histogram<u64>, elapsed_us: f64, errors: usize, passes: usize) {
     let iterations = passes + errors;
-    let rps = (iterations as f64 / (elapsed_ms / 1_000.0)) as usize;
+    let rps = (iterations as f64 / (elapsed_us / 1_000_000.0)) as usize;
 
-    println!("total time: {:.3} s", elapsed_ms / 1_000.0,);
-    print!("errors: {}/{}", errors, iterations,);
+    println!("total time: {}", Microseconds(elapsed_us));
+    print!("errors: {}/{}", errors, iterations);
 
     if errors > 0 {
         println!(" ({:.2}%)", (errors as f64 / iterations as f64) * 100.0);
@@ -264,21 +268,21 @@ fn print_results(times: Histogram<u64>, elapsed_ms: f64, errors: usize, passes: 
     println!("throughput: {} req./s", rps,);
 
     println!(
-        "response times:\n\tmean\t{:.3} ms\n\tst.dev\t{:.3} ms\n\tmin\t{:.3} ms\n\tmax\t{:.3} ms",
-        times.mean() / 1000.0,
-        times.stdev() / 1000.0,
-        times.min() as f64 / 1000.0,
-        times.max() as f64 / 1000.0,
+        "response times:\n\tmean\t{}\n\tst.dev\t{}\n\tmin\t{}\n\tmax\t{}",
+        Microseconds(times.mean()),
+        Microseconds(times.stdev()),
+        Microseconds(times.min() as f64),
+        Microseconds(times.max() as f64),
     );
 
     println!(
-        "latencies:\n\t50%\t{:.3} ms\n\t75%\t{:.3} ms\n\t90%\t{:.3} ms\n\t95%\t{:.3} ms\n\t99%\t{:.3} ms\n\t99.9%\t{:.3} ms",
-        times.value_at_quantile(0.5) as f64 / 1000.0,
-        times.value_at_quantile(0.75) as f64 / 1000.0,
-        times.value_at_quantile(0.9) as f64 / 1000.0,
-        times.value_at_quantile(0.95) as f64 / 1000.0,
-        times.value_at_quantile(0.99) as f64 / 1000.0,
-        times.value_at_quantile(0.999) as f64 / 1000.0,
+        "latencies:\n\t50%\t{}\n\t75%\t{}\n\t90%\t{}\n\t95%\t{}\n\t99%\t{}\n\t99.9%\t{}",
+        Microseconds(times.value_at_quantile(0.5) as f64),
+        Microseconds(times.value_at_quantile(0.75) as f64),
+        Microseconds(times.value_at_quantile(0.9) as f64),
+        Microseconds(times.value_at_quantile(0.95) as f64),
+        Microseconds(times.value_at_quantile(0.99) as f64),
+        Microseconds(times.value_at_quantile(0.999) as f64),
     );
 }
 
