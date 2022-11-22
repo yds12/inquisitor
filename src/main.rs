@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
+use std::io::Read;
+
 mod microseconds;
 
 use microseconds::Microseconds;
@@ -72,6 +74,10 @@ pub struct Config {
     /// seconds is used.
     #[clap(long, short = 'd', value_parser = parse_duration)]
     duration: Option<Duration>,
+    /// Path to a root CA certificate in PEM format, to be added to the request
+    /// client's list of trusted CA certificates.
+    #[clap(long, value_parser)]
+    ca_cert: Option<String>,
 }
 
 #[derive(Debug)]
@@ -143,11 +149,27 @@ fn main() {
         .build()
         .unwrap();
 
+    let mut cert = None;
+    if let Some(cert_file) = config.ca_cert.as_deref() {
+        let mut buf = Vec::new();
+        std::fs::File::open(cert_file)
+            .unwrap_or_else(|_| panic!("Could not open {}", cert_file))
+            .read_to_end(&mut buf)
+            .unwrap_or_else(|_| panic!("Could not read file {}", cert_file));
+        cert = Some(
+            reqwest::Certificate::from_pem(&buf)
+                .unwrap_or_else(|_| panic!("Could not convert file to PEM certificate")),
+        );
+    }
+
     for _ in 0..config.connections {
-        let client = ClientBuilder::new()
-            .danger_accept_invalid_certs(config.insecure)
-            .build()
-            .unwrap();
+        let mut client = ClientBuilder::new().danger_accept_invalid_certs(config.insecure);
+
+        if let Some(cert) = cert.clone() {
+            client = client.add_root_certificate(cert);
+        }
+
+        let client = client.build().unwrap();
 
         let passes = passes.clone();
         let errors = errors.clone();
