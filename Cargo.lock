@@ -493,13 +493,21 @@ dependencies = [
 
 [[package]]
 name = "inquisitor"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "clap",
+ "inquisitor-core",
+ "mockito",
+ "regex",
+]
+
+[[package]]
+name = "inquisitor-core"
+version = "0.8.2"
+dependencies = [
  "ctrlc",
  "futures",
  "hdrhistogram",
- "mockito",
  "regex",
  "reqwest",
  "tokio",

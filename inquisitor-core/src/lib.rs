@@ -1,4 +1,3 @@
-use clap::{Parser as _, ValueEnum};
 use hdrhistogram::Histogram;
 use reqwest::ClientBuilder;
 use std::collections::HashMap;
@@ -13,56 +12,46 @@ mod microseconds;
 
 use microseconds::Microseconds;
 
-const MAX_CONNS: usize = 12;
-const DEFAULT_DURATION_SECS: u64 = 20;
+pub const MAX_CONNS: usize = 12;
+pub const DEFAULT_DURATION_SECS: u64 = 20;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
+/// HTTP method
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Method {
-    GET,
-    POST,
+    Get,
+    Post,
 }
 
-#[derive(clap::Parser)]
-#[command(about, version, disable_colored_help = true)]
+/// Configuration of the load test runner
 pub struct Config {
     /// Target URL for the load test
-    #[clap(value_parser)]
-    url: String,
+    pub url: String,
     /// Number of requests to be sent
     ///
     /// If this and `--duration` (`-d`) are specified, the tests will end when
     /// the first of them is reached. If none is specified, a duration of 20
     /// seconds is used.
-    #[clap(long, short = 'n', value_parser)]
-    iterations: Option<usize>,
+    pub iterations: Option<usize>,
     /// Maximum number of HTTP connections to be kept opened concurrently
-    #[clap(long, short = 'c', default_value_t = MAX_CONNS, value_parser)]
-    connections: usize,
+    pub connections: usize,
     /// Print the result of successful responses
-    #[clap(long, action)]
-    print_response: bool,
+    pub print_response: bool,
     /// If the response matches the string specified in this parameter, the
     /// response will be considered to be a failure
-    #[clap(long, value_parser)]
-    failed_body: Option<String>,
+    pub failed_body: Option<String>,
     /// Do not validate (TLS) certificates
-    #[clap(long, short = 'k', action)]
-    insecure: bool,
+    pub insecure: bool,
     /// HTTP method to use in the requests
-    #[clap(long, default_value_t = Method::GET, value_enum)]
-    method: Method,
+    pub method: Method,
     /// Body of the HTTP request (only used if method is POST)
-    #[clap(long, short = 'b', value_parser)]
-    request_body: Option<String>,
+    pub request_body: Option<String>,
     /// Header entry for the HTTP request.
     ///
     /// The value should be in a KEY:VALUE format. Multiple key-value pairs can
     /// be passed, e.g.: `-H Content-Type:application/json -H SomeKey:SomeValue
-    #[clap(long, short = 'H', value_parser)]
-    header: Vec<String>,
+    pub header: Vec<String>,
     /// Do not print errors
-    #[clap(long, action)]
-    hide_errors: bool,
+    pub hide_errors: bool,
     /// Duration of the test.
     ///
     /// Should be a number (integer or decimal) followed by a "s", "m", or "h",
@@ -72,16 +61,15 @@ pub struct Config {
     /// If this and `--duration` (`-d`) are specified, the tests will end when
     /// the first of them is reached. If none is specified, a duration of 20
     /// seconds is used.
-    #[clap(long, short = 'd', value_parser = parse_duration)]
-    duration: Option<Duration>,
+    pub duration: Option<Duration>,
     /// Path to a root CA certificate in PEM format, to be added to the request
     /// client's list of trusted CA certificates.
-    #[clap(long, value_parser)]
-    ca_cert: Option<String>,
+    pub ca_cert: Option<String>,
 }
 
+/// Error type for this library
 #[derive(Debug)]
-enum InquisitorError {
+pub enum InquisitorError {
     DurationParseError,
 }
 
@@ -95,7 +83,9 @@ impl std::fmt::Display for InquisitorError {
 
 impl std::error::Error for InquisitorError {}
 
-fn main() {
+/// Run load tests with the given configuration
+pub fn run<C: Into<Config>>(config: C) {
+    let config: Config = config.into();
     let should_exit = Arc::new(AtomicBool::new(false));
     let should_exit_clone = should_exit.clone();
 
@@ -107,8 +97,6 @@ fn main() {
         }
     })
     .expect("Error setting signal handler");
-
-    let config = Config::parse();
 
     let (iterations, duration) = match (config.iterations, config.duration) {
         (None, None) => (usize::MAX, DEFAULT_DURATION_SECS * 1_000_000),
@@ -189,8 +177,8 @@ fn main() {
                 }
 
                 let mut builder = match config.method {
-                    Method::GET => client.get(&url),
-                    Method::POST => client.post(&url),
+                    Method::Get => client.get(&url),
+                    Method::Post => client.post(&url),
                 };
 
                 if let Some(body) = request_body.as_deref() {
@@ -308,7 +296,7 @@ fn print_results(times: Histogram<u64>, elapsed_us: f64, errors: usize, passes: 
     );
 }
 
-fn parse_duration(duration: &str) -> Result<Duration, InquisitorError> {
+pub fn parse_duration(duration: &str) -> Result<Duration, InquisitorError> {
     let re = regex::Regex::new(r"(\d\d*(?:\.\d\d*)??)([smh])").expect("Bug: wrong regex");
     let cap = re
         .captures(duration)

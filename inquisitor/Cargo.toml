@@ -1,0 +1,22 @@
+[package]
+authors = ["Y. D. Santos <yds12@protonmail.com>"]
+name = "inquisitor"
+version = "0.8.2"
+edition = "2021"
+license = "MIT"
+description = "Simple and fast load testing tool"
+homepage = "https://github.com/yds12/inquisitor"
+repository = "https://github.com/yds12/inquisitor"
+readme = "README.md"
+documentation = "https://docs.rs/inquisitor/latest/"
+keywords = ["load-testing", "stress-testing", "api", "http", "performance"]
+categories = ["development-tools", "development-tools::profiling",
+"network-programming", "web-programming", "command-line-utilities"]
+
+[dependencies]
+inquisitor-core = { path = "../inquisitor-core", version = "0.8.2" }
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+mockito = "0.31"
+regex = "1"
