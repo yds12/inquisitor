@@ -1,7 +1,7 @@
 [package]
 authors = ["Y. D. Santos <yds12@protonmail.com>"]
 name = "inquisitor-core"
-version = "0.8.2"
+version = "0.9.0"
 edition = "2021"
 license = "MIT"
 description = "Simple and fast load testing library"

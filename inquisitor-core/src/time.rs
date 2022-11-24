@@ -1,3 +1,6 @@
+use crate::error::InquisitorError;
+use std::time::Duration;
+
 /// Represents an amount of microseconds
 pub struct Microseconds(pub f64);
 
@@ -14,6 +17,28 @@ impl std::fmt::Display for Microseconds {
             x => write!(f, "{:.0} s", x / 1_000_000.0),
         }
     }
+}
+
+/// Parse a duration like 10s, 25m, 3.5h into a duration. Decimal numbers are
+/// allowed, and the allowed time units are: seconds (s), minutes (m) and
+/// hours (h).
+pub fn parse_duration(duration: &str) -> Result<Duration, InquisitorError> {
+    let re = regex::Regex::new(r"(\d\d*(?:\.\d\d*)??)([smh])").expect("Bug: wrong regex");
+    let cap = re
+        .captures(duration)
+        .ok_or(InquisitorError::DurationParseError)?;
+
+    let base = cap[1]
+        .parse::<f64>()
+        .map_err(|_| InquisitorError::DurationParseError)?;
+    let mul: f64 = match &cap[2] {
+        "s" => 1_000_000.0,
+        "m" => 60.0 * 1_000_000.0,
+        "h" => 60.0 * 60.0 * 1_000_000.0,
+        _ => unreachable!(),
+    };
+
+    Ok(Duration::from_micros((base * mul) as u64))
 }
 
 #[cfg(test)]

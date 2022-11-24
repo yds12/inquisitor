@@ -3,9 +3,12 @@
 
 # Inquisitor
 
-Simple and fast HTTP load testing tool written in Rust.
+Simple and fast HTTP load testing tool written in Rust. All the actual
+functionality is provided by
+[inquisitor-core](https://crates.io/crates/inquisitor-core),
+while this crate contains the command-line executable.
 
-This project is currently in its infancy and is very much a work in progress.
+This project is currently a work in progress.
 
 ## Building and Installing
 

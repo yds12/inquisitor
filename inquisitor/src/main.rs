@@ -1,5 +1,6 @@
 use clap::{Parser as _, ValueEnum};
-use inquisitor_core::{parse_duration, Config, Method, MAX_CONNS};
+use inquisitor_core::time::parse_duration;
+use inquisitor_core::{Config, Method, MAX_CONNS};
 use std::time::Duration;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -64,7 +65,7 @@ struct Cli {
     /// for seconds, minutes and hours, respectively, without spaces. For
     /// example: "10s" (10 seconds), "1.5m" (1.5 minutes), "20h" (20 hours).
     ///
-    /// If this and `--duration` (`-d`) are specified, the tests will end when
+    /// If this and `--iterations` (`-n`) are specified, the tests will end when
     /// the first of them is reached. If none is specified, a duration of 20
     /// seconds is used.
     #[clap(long, short = 'd', value_parser = parse_duration)]

@@ -14,7 +14,7 @@ categories = ["development-tools", "development-tools::profiling",
 "network-programming", "web-programming", "command-line-utilities"]
 
 [dependencies]
-inquisitor-core = { path = "../inquisitor-core", version = "0.8.2" }
+inquisitor-core = { path = "../inquisitor-core", version = "0.9.0" }
 clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
